@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-Speech Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f4f4f9;
+        }
+
+        textarea {
+            width: 80%;
+            height: 150px;
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+            resize: none;
+        }
+
+        select, button {
+            width: 80%;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .download-btn {
+            background-color: #28a745;
+        }
+
+        .download-btn:hover {
+            background-color: #1e7e34;
+        }
+    </style>
+</head>
+<body>
+    <h1>Text-to-Speech Converter</h1>
+    <textarea placeholder="Enter text here..."></textarea>
+    <select></select>
+    <button id="convertBtn">Convert To Speech</button>
+    <button id="downloadBtn" class="download-btn" disabled>Download Speech</button>
+
+    <script>
+        const textarea = document.querySelector("textarea"),
+            voiceList = document.querySelector("select"),
+            convertBtn = document.getElementById("convertBtn"),
+            downloadBtn = document.getElementById("downloadBtn");
+
+        let synth = speechSynthesis,
+            audioBlob = null;
+
+        function populateVoices() {
+            voiceList.innerHTML = "";
+            for (let voice of synth.getVoices()) {
+                let selected = voice.name === "Google US English" ? "selected" : "";
+                let option = `<option value="${voice.name}" ${selected}>${voice.name} (${voice.lang})</option>`;
+                voiceList.insertAdjacentHTML("beforeend", option);
+            }
+        }
+
+        synth.addEventListener("voiceschanged", populateVoices);
+        populateVoices();
+
+        function textToSpeech(text, callback) {
+            let utterance = new SpeechSynthesisUtterance(text);
+            let selectedVoice = voiceList.value;
+
+            for (let voice of synth.getVoices()) {
+                if (voice.name === selectedVoice) {
+                    utterance.voice = voice;
+                    break;
+                }
+            }
+
+            // Capture the audio using MediaRecorder
+            const audioContext = new AudioContext();
+            const destination = audioContext.createMediaStreamDestination();
+            const mediaRecorder = new MediaRecorder(destination.stream);
+            const chunks = [];
+
+            utterance.onstart = () => {
+                const source = audioContext.createMediaStreamSource(destination.stream);
+                source.connect(audioContext.destination);
+                mediaRecorder.start();
+            };
+
+            utterance.onend = () => {
+                mediaRecorder.stop();
+            };
+
+            mediaRecorder.ondataavailable = (e) => {
+                chunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                audioBlob = new Blob(chunks, { type: "audio/mp3" });
+                callback();
+            };
+
+            synth.speak(utterance);
+        }
+
+        convertBtn.addEventListener("click", () => {
+            if (textarea.value !== "") {
+                textToSpeech(textarea.value, () => {
+                    downloadBtn.disabled = false;
+                });
+            }
+        });
+
+        downloadBtn.addEventListener("click", () => {
+            if (audioBlob) {
+                const url = URL.createObjectURL(audioBlob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "speech.mp3";
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        });
+    </script>
+</body>
+</html>
